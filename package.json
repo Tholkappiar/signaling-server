@@ -1,0 +1,26 @@
+{
+    "name": "signaling-server",
+    "version": "1.0.0",
+    "description": "signaling server for webrtc communication",
+    "author": "tholkappiar",
+    "license": "MIT",
+    "private": false,
+    "scripts": {
+        "start": "node ./dist/index.js",
+        "dev": "yarn nodemon ./src/index.ts",
+        "build": "yarn tsc"
+    },
+    "dependencies": {
+        "dotenv": "^16.5.0",
+        "express": "^5.1.0",
+        "typescript": "^5.8.3",
+        "ws": "^8.18.2"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.3",
+        "@types/node": "^24.0.3",
+        "@types/ws": "^8.18.1",
+        "nodemon": "^3.1.10",
+        "ts-node": "^10.9.2"
+    }
+}
