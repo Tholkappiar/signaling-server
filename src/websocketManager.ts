@@ -35,6 +35,21 @@ export class WebSocketManager {
         }
 
         this.wss.on("connection", (ws) => {
+            // const authToken = req.headers.authorization?.split(" ")[1];
+            // if (!authToken || !authToken[0]!! || !authToken[1]) {
+            //     console.error("No or invalid Authorization header");
+            //     ws.close(1008, "Unauthorized");
+            //     return;
+            // }
+
+            // const isVerified = await verifyUser(authToken);
+            // console.log("is verified : ", isVerified);
+            // if (!isVerified) {
+            //     console.error("No or invalid Authorization header");
+            //     ws.close(1008, "Unauthorized");
+            //     return;
+            // }
+
             console.log("New WebSocket connection established");
 
             ws.on("message", (data) => {
@@ -59,7 +74,6 @@ export class WebSocketManager {
             });
 
             ws.on("close", () => {
-                // Remove user on disconnect
                 for (const [userId, socket] of this.Users.entries()) {
                     if (socket === ws) {
                         this.Users.delete(userId);
@@ -76,7 +90,15 @@ export class WebSocketManager {
     }
 
     private handleMessages(data: WebSocketMessage, ws: WebSocket) {
-        console.log("Handling message:", data.type, "from:", data.from);
+        console.log(
+            "Handling message:",
+            data.type,
+            "from:",
+            data.from,
+            "to:",
+            data.to
+        );
+
         switch (data.type) {
             case "register":
                 if (this.Users.has(data.from)) {
@@ -87,9 +109,83 @@ export class WebSocketManager {
                 this.Users.set(data.from, ws);
                 console.log(`User ${data.from} registered`);
                 break;
+
+            case "initiate_call":
+                const recipientWs = this.Users.get(data.to);
+                if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+                    recipientWs.send(
+                        JSON.stringify({
+                            type: "initiate_call",
+                            from: data.from,
+                            callId: data.callId,
+                            to: data.to,
+                        })
+                    );
+                    console.log(
+                        `Call initiated from ${data.from} to ${data.to}`
+                    );
+                } else {
+                    ws.send(
+                        JSON.stringify({
+                            type: "error",
+                            message: "Recipient not online",
+                            callId: data.callId,
+                            from: data.to,
+                            to: data.from,
+                        })
+                    );
+                    console.log(`Recipient ${data.to} not online`);
+                }
+                break;
+
+            case "accept_call":
+                const callerWs = this.Users.get(data.to);
+                if (callerWs && callerWs.readyState === WebSocket.OPEN) {
+                    callerWs.send(
+                        JSON.stringify({
+                            type: "call_accepted",
+                            from: data.from,
+                            callId: data.callId,
+                            to: data.to,
+                        })
+                    );
+                    console.log(
+                        `Call accepted by ${data.from}, notified ${data.to}`
+                    );
+                } else {
+                    console.error(
+                        `Caller ${data.to} not found or connection closed`
+                    );
+                }
+                break;
+
+            case "decline_call":
+                const declinedCallerWs = this.Users.get(data.to);
+                if (
+                    declinedCallerWs &&
+                    declinedCallerWs.readyState === WebSocket.OPEN
+                ) {
+                    declinedCallerWs.send(
+                        JSON.stringify({
+                            type: "call_declined",
+                            from: data.from,
+                            callId: data.callId,
+                            to: data.to,
+                        })
+                    );
+                    console.log(
+                        `Call declined by ${data.from}, notified ${data.to}`
+                    );
+                } else {
+                    console.error(
+                        `Caller ${data.to} not found or connection closed`
+                    );
+                }
+                break;
+
+            case "offer":
             case "answer":
             case "candidate":
-            case "offer":
                 const receiver = this.Users.get(data.to);
                 if (!receiver) {
                     console.error(`Receiver ${data.to} not found`);
@@ -97,7 +193,9 @@ export class WebSocketManager {
                 }
                 if (receiver.readyState === WebSocket.OPEN) {
                     receiver.send(JSON.stringify(data));
-                    console.log(`Sent ${data.type} to ${data.to}`);
+                    console.log(
+                        `Sent ${data.type} from ${data.from} to ${data.to}`
+                    );
                 } else {
                     console.error(`Receiver ${data.to} WebSocket is not open`);
                 }
@@ -111,3 +209,13 @@ export class WebSocketManager {
         return this.Users;
     }
 }
+
+// async function verifyUser(token: string) {
+//     const convex = new ConvexHttpClient(
+//         "https://precious-axolotl-250.convex.cloud"
+//     );
+//     // @ts-ignore
+//     const user = await convex.query(api.user.getProfile);
+//     console.log("this is user ", user);
+//     return user;
+// }
