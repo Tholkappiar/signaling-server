@@ -13,11 +13,15 @@
     "dependencies": {
         "dotenv": "^16.5.0",
         "express": "^5.1.0",
+        "jsonwebtoken": "^9.0.2",
+        "jwk-to-pem": "^2.0.7",
         "typescript": "^5.8.3",
         "ws": "^8.18.2"
     },
     "devDependencies": {
         "@types/express": "^5.0.3",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/jwk-to-pem": "^2.0.3",
         "@types/node": "^24.0.3",
         "@types/ws": "^8.18.1",
         "nodemon": "^3.1.10",

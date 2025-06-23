@@ -1,6 +1,8 @@
 import { Server } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 import { WebSocketMessage } from "./types/types";
+import jwt from "jsonwebtoken";
+import jwkToPem from "jwk-to-pem";
 
 export class WebSocketManager {
     private Users: Map<string, WebSocket> = new Map();
@@ -34,21 +36,23 @@ export class WebSocketManager {
             return;
         }
 
-        this.wss.on("connection", (ws) => {
-            // const authToken = req.headers.authorization?.split(" ")[1];
-            // if (!authToken || !authToken[0]!! || !authToken[1]) {
-            //     console.error("No or invalid Authorization header");
-            //     ws.close(1008, "Unauthorized");
-            //     return;
-            // }
+        this.wss.on("connection", async (ws, req) => {
+            const authToken =
+                req.headers["sec-websocket-protocol"]?.split(" ")[1];
+            console.log(req.headers["sec-websocket-protocol"]);
+            if (!authToken || !authToken[0]!! || !authToken[1]) {
+                console.error("No or invalid Authorization header");
+                ws.close(1008, "Unauthorized");
+                return;
+            }
 
-            // const isVerified = await verifyUser(authToken);
-            // console.log("is verified : ", isVerified);
-            // if (!isVerified) {
-            //     console.error("No or invalid Authorization header");
-            //     ws.close(1008, "Unauthorized");
-            //     return;
-            // }
+            const isVerified = await verifyUser(authToken);
+            console.log("is verified : ", isVerified);
+            if (!isVerified) {
+                console.error("No or invalid Authorization header");
+                ws.close(1008, "Unauthorized");
+                return;
+            }
 
             console.log("New WebSocket connection established");
 
@@ -210,12 +214,21 @@ export class WebSocketManager {
     }
 }
 
-// async function verifyUser(token: string) {
-//     const convex = new ConvexHttpClient(
-//         "https://precious-axolotl-250.convex.cloud"
-//     );
-//     // @ts-ignore
-//     const user = await convex.query(api.user.getProfile);
-//     console.log("this is user ", user);
-//     return user;
-// }
+async function verifyUser(token: string) {
+    try {
+        const response = await fetch(
+            "https://precious-axolotl-250.convex.site/.well-known/jwks.json"
+        );
+
+        const JWKS = JSON.parse(await response.json());
+        const publicKey = jwkToPem(JWKS.keys[0]);
+
+        const user = jwt.verify(token, publicKey, {
+            algorithms: ["RS256"],
+        });
+        return user;
+    } catch (err) {
+        console.log(err);
+        return null;
+    }
+}
