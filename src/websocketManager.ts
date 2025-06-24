@@ -241,12 +241,13 @@ export class WebSocketManager {
 async function verifyUser(token: string) {
     try {
         const convex_url = process.env.CONVEX_URL ? process.env.CONVEX_URL : "";
-        const response = await fetch(convex_url, { cache: "no-store" });
+        const response = await fetch(convex_url + "/.well-known/jwks.json", {
+            cache: "no-store",
+        });
 
         if (!response.ok) {
             throw new Error(`Failed to fetch JWKS: ${response.statusText}`);
         }
-
         const jwks = await response.json();
         if (!jwks.keys || !Array.isArray(jwks.keys) || jwks.keys.length === 0) {
             throw new Error("Invalid JWKS response: No keys found");
