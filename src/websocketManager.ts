@@ -3,6 +3,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { WebSocketMessage } from "./types/types";
 import jwt from "jsonwebtoken";
 import jwkToPem from "jwk-to-pem";
+import { URL } from "url";
 
 export class WebSocketManager {
     private Users: Map<string, WebSocket> = new Map();
@@ -15,7 +16,34 @@ export class WebSocketManager {
             return;
         }
         try {
-            this.wss = new WebSocketServer({ server });
+            this.wss = new WebSocketServer({
+                server,
+                verifyClient: async (info, cb) => {
+                    // Extract token from query parameter
+                    const url = new URL(
+                        info.req.url || "",
+                        `http://${info.req.headers.host}`
+                    );
+                    const authToken = url.searchParams.get("token");
+
+                    if (!authToken) {
+                        console.error("No token provided in query parameter");
+                        cb(false, 401, "Unauthorized: No token provided");
+                        return;
+                    }
+
+                    const user = await verifyUser(authToken);
+                    if (!user || typeof user === "string" || !user.sub) {
+                        console.error("Invalid or unverified token");
+                        cb(false, 401, "Unauthorized: Invalid token");
+                        return;
+                    }
+
+                    // Store user ID in the request object for later use
+                    (info.req as any).userId = user.sub;
+                    cb(true); // Allow connection
+                },
+            });
             this.setupEventHandlers();
             console.log("WebSocket server initialized");
         } catch (err) {
@@ -36,29 +64,25 @@ export class WebSocketManager {
             return;
         }
 
-        this.wss.on("connection", async (ws, req) => {
-            const authToken =
-                req.headers["sec-websocket-protocol"]?.split(" ")[1];
-            console.log(req.headers["sec-websocket-protocol"]);
-            if (!authToken || !authToken[0]!! || !authToken[1]) {
-                console.error("No or invalid Authorization header");
+        this.wss.on("connection", (ws, req) => {
+            // Get user ID from the request object
+            const userId = (req as any).userId;
+            if (!userId) {
+                console.error("No user ID found in request");
                 ws.close(1008, "Unauthorized");
                 return;
             }
 
-            const isVerified = await verifyUser(authToken);
-            console.log("is verified : ", isVerified);
-            if (!isVerified) {
-                console.error("No or invalid Authorization header");
-                ws.close(1008, "Unauthorized");
-                return;
-            }
-
-            console.log("New WebSocket connection established");
+            console.log(
+                `New WebSocket connection established for user: ${userId}`
+            );
+            this.Users.set(userId, ws);
 
             ws.on("message", (data) => {
                 try {
-                    const parsed = JSON.parse(String(data)) as WebSocketMessage;
+                    const parsed = JSON.parse(
+                        data.toString()
+                    ) as WebSocketMessage;
                     if (!parsed.type || !parsed.from) {
                         console.error(
                             "Invalid WebSocket message format:",
@@ -78,10 +102,10 @@ export class WebSocketManager {
             });
 
             ws.on("close", () => {
-                for (const [userId, socket] of this.Users.entries()) {
+                for (const [id, socket] of this.Users.entries()) {
                     if (socket === ws) {
-                        this.Users.delete(userId);
-                        console.log(`User ${userId} disconnected`);
+                        this.Users.delete(id);
+                        console.log(`User ${id} disconnected`);
                         break;
                     }
                 }
@@ -216,19 +240,27 @@ export class WebSocketManager {
 
 async function verifyUser(token: string) {
     try {
-        const response = await fetch(
-            "https://precious-axolotl-250.convex.site/.well-known/jwks.json"
-        );
+        const convex_url = process.env.CONVEX_URL ? process.env.CONVEX_URL : "";
+        const response = await fetch(convex_url, { cache: "no-store" });
 
-        const JWKS = JSON.parse(await response.json());
-        const publicKey = jwkToPem(JWKS.keys[0]);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch JWKS: ${response.statusText}`);
+        }
+
+        const jwks = await response.json();
+        if (!jwks.keys || !Array.isArray(jwks.keys) || jwks.keys.length === 0) {
+            throw new Error("Invalid JWKS response: No keys found");
+        }
+
+        const publicKey = jwkToPem(jwks.keys[0]);
 
         const user = jwt.verify(token, publicKey, {
             algorithms: ["RS256"],
         });
+
         return user;
     } catch (err) {
-        console.log(err);
+        console.error("Error verifying user:", err);
         return null;
     }
 }
