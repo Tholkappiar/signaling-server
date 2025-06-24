@@ -76,7 +76,6 @@ export class WebSocketManager {
             console.log(
                 `New WebSocket connection established for user: ${userId}`
             );
-            this.Users.set(userId, ws);
 
             ws.on("message", (data) => {
                 try {
@@ -129,6 +128,10 @@ export class WebSocketManager {
 
         switch (data.type) {
             case "register":
+                if (!data.from) {
+                    console.log(`From not provided`);
+                    return;
+                }
                 if (this.Users.has(data.from)) {
                     console.log(
                         `User ${data.from} already registered, updating socket`
