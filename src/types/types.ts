@@ -11,7 +11,8 @@ export interface WebSocketMessage {
         | "initiate_call"
         | "accept_call"
         | "decline_call"
-        | "error";
+        | "error"
+        | "chat";
     from: string;
     to: string;
     sdp?: any;

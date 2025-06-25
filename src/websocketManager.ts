@@ -217,6 +217,7 @@ export class WebSocketManager {
             case "offer":
             case "answer":
             case "candidate":
+            case "chat":
                 const receiver = this.Users.get(data.to);
                 if (!receiver) {
                     console.error(`Receiver ${data.to} not found`);
